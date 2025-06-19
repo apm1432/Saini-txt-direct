@@ -708,8 +708,10 @@ async def txt_handler(bot: Client, m: Message):
                 url = mpd
                 keys_string = " ".join([f"--key {key}" for key in keys])
 
-            elif "classplusapp.com/drm/" in url:
-                url = 'https://dragoapi.vercel.app/classplus?link=' + url
+         #   elif "classplusapp.com/drm/" in url:
+            #    url = 'https://dragoapi.vercel.app/classplus?link=' + url
+            elif "media-cdn.classplusapp.com/drm/" in url:
+                url = f"https://www.masterapi.tech/get/cp/dl?url={url}"
                 mpd, keys = helper.get_mps_and_keys(url)
                 url = mpd
                 keys_string = " ".join([f"--key {key}" for key in keys])
