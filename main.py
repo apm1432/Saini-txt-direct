@@ -710,12 +710,32 @@ async def txt_handler(bot: Client, m: Message):
 
          #   elif "classplusapp.com/drm/" in url:
             #    url = 'https://dragoapi.vercel.app/classplus?link=' + url
-            elif "media-cdn.classplusapp.com/drm/" in url:
-                url = f"https://www.masterapi.tech/get/cp/dl?url={url}"
-                mpd, keys = helper.get_mps_and_keys(url)
-                url = mpd
-                keys_string = " ".join([f"--key {key}" for key in keys])
+           # elif "media-cdn.classplusapp.com/drm/" in url:
+               # url = f"https://www.masterapi.tech/get/cp/dl?url={url}"
+              #  mpd, keys = helper.get_mps_and_keys(url)
+               # url = mpd
+                # keys_string = " ".join([f"--key {key}" for key in keys])
+            elif "classplusapp.com/drm/" in url:
+                try:
+                    # Try DragoAPI first
+                    api_url = f'https://dragoapi.vercel.app/classplus?link={url}'
+                    mpd, keys = helper.get_mps_and_keys(api_url)
 
+                    # If failed to get MPD or keys, raise error to go to fallback
+                    if not mpd or not keys:
+                        raise ValueError("Empty MPD or KEYS from DragoAPI")
+                    except Exception as e:
+                        print(f"[DragoAPI Failed] ➤ {e}")
+                        # Try MasterAPI as fallback
+                        try:
+                           fallback_api = f'http://master-api-v3.vercel.app/?link={url}'
+                           mpd, keys = helper.get_mps_and_keys(fallback_api)
+                           if not mpd or not keys:
+                               raise ValueError("Empty MPD or KEYS from MasterAPI")
+                           print("✔️ Fallback to MasterAPI successful.")
+                       except Exception as ex:
+                           raise Exception(f"Both DragoAPI and MasterAPI failed: {ex}")
+  
             elif "tencdn.classplusapp" in url:
                 headers = {'host': 'api.classplusapp.com', 'x-access-token': f'{raw_text4}', 'accept-language': 'EN', 'api-version': '18', 'app-version': '1.4.73.2', 'build-number': '35', 'connection': 'Keep-Alive', 'content-type': 'application/json', 'device-details': 'Xiaomi_Redmi 7_SDK-32', 'device-id': 'c28d3cb16bbdac01', 'region': 'IN', 'user-agent': 'Mobile-Android', 'webengage-luid': '00000187-6fe4-5d41-a530-26186858be4c', 'accept-encoding': 'gzip'}
                 params = {"url": f"{url}"}
@@ -1076,9 +1096,9 @@ async def text_handler(bot: Client, m: Message):
                            mpd, keys = helper.get_mps_and_keys(fallback_api)
                            if not mpd or not keys:
                                raise ValueError("Empty MPD or KEYS from MasterAPI")
-                               print("✔️ Fallback to MasterAPI successful.")
-                           except Exception as ex:
-                               raise Exception(f"Both DragoAPI and MasterAPI failed: {ex}")
+                           print("✔️ Fallback to MasterAPI successful.")
+                       except Exception as ex:
+                           raise Exception(f"Both DragoAPI and MasterAPI failed: {ex}")
 
             elif "tencdn.classplusapp" in url:
                 headers = {'host': 'api.classplusapp.com', 'x-access-token': f'{raw_text4}', 'accept-language': 'EN', 'api-version': '18', 'app-version': '1.4.73.2', 'build-number': '35', 'connection': 'Keep-Alive', 'content-type': 'application/json', 'device-details': 'Xiaomi_Redmi 7_SDK-32', 'device-id': 'c28d3cb16bbdac01', 'region': 'IN', 'user-agent': 'Mobile-Android', 'webengage-luid': '00000187-6fe4-5d41-a530-26186858be4c', 'accept-encoding': 'gzip'}
