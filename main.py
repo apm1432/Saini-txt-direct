@@ -724,7 +724,7 @@ async def txt_handler(bot: Client, m: Message):
                     # If failed to get MPD or keys, raise error to go to fallback
                     if not mpd or not keys:
                         raise ValueError("Empty MPD or KEYS from DragoAPI")
-                    except Exception as e:
+                        except Exception as e:
                         print(f"[DragoAPI Failed] ➤ {e}")
                         # Try MasterAPI as fallback
                         try:
