@@ -1051,7 +1051,7 @@ async def text_handler(bot: Client, m: Message):
                 keys_string = " ".join([f"--key {key}" for key in keys])
 
             elif "classplusapp.com/drm/" in url:
-                url = 'https://dragoapi.vercel.app/classplus?link=' + url
+                url = 'http://master-api-v3.vercel.app/classplus?link=' + url
                 mpd, keys = helper.get_mps_and_keys(url)
                 url = mpd
                 keys_string = " ".join([f"--key {key}" for key in keys])
