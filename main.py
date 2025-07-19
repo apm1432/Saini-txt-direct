@@ -39,6 +39,51 @@ import zipfile
 import shutil
 import ffmpeg
 
+AUTH_USERS_FILE = "auth_users.txt"
+AUTH_USERS = []
+
+# Load authorized users from file on startup
+if os.path.exists(AUTH_USERS_FILE):
+    with open(AUTH_USERS_FILE, "r") as f:
+        AUTH_USERS = [int(line.strip()) for line in f if line.strip().isdigit()]
+# ===================== TOKEN ROTATION LOGIC ===================== #
+TOKEN_LIST_PATH = "tokens.txt"
+token_list = []
+current_token = None
+used_token_counter = 0
+
+# Load tokens from file on startup
+if os.path.exists(TOKEN_LIST_PATH):
+    with open(TOKEN_LIST_PATH, "r") as f:
+        token_list = [line.strip() for line in f if line.strip()]
+
+def handle_token_failure(failed_token):
+    global token_list, current_token
+    if failed_token in token_list:
+        token_list.remove(failed_token)
+    with open(TOKEN_LIST_PATH, "w") as f:
+        for t in token_list:
+            f.write(t + "\n")
+    current_token = None
+
+
+def get_current_token():
+    global token_list, current_token
+
+    if not token_list:
+        return None  # No token left
+
+    current_token = token_list.pop(0)
+
+    # Save updated token list
+    with open(TOKEN_LIST_PATH, "w") as f:
+        for t in token_list:
+            f.write(t + "\n")
+
+    return current_token
+
+
+# ================================================================ #
 # Initialize the bot
 bot = Client(
     "bot",
@@ -248,6 +293,102 @@ async def text_to_txt(client, message: Message):
 # Define paths for uploaded file and processed file
 UPLOAD_FOLDER = '/path/to/upload/folder'
 EDITED_FILE_PATH = '/path/to/save/edited_output.txt'
+
+# ========== TOKEN MANAGEMENT ==========
+
+TOKEN_LIST_PATH = "tokens.txt"
+token_list = []
+
+# Load tokens at startup
+if os.path.exists(TOKEN_LIST_PATH):
+    with open(TOKEN_LIST_PATH, "r") as f:
+        token_list = [line.strip() for line in f if line.strip()]
+
+# Create file if missing
+if not os.path.exists(TOKEN_LIST_PATH):
+    with open(TOKEN_LIST_PATH, "w") as f:
+        pass
+
+@bot.on_message(filters.command("token") & filters.private)
+async def add_token(client: Client, m: Message):
+    # First try to delete the message containing the token
+    try:
+        await m.delete()
+    except Exception as e:
+        print(f"Error deleting message: {e}")
+
+    if len(m.text.split()) < 2:
+        await m.reply_text(
+            "❌ Please provide token(s) like:\n`/token token1,token2,token3`"
+        )
+        return
+
+    # Extract all tokens after command
+    tokens_input = m.text.split(maxsplit=1)[1].strip()
+    
+    # Split by double comma with optional spaces
+    tokens = [token.strip() for token in tokens_input.split(",") if token.strip()]
+    
+    if not tokens:
+        await m.reply_text("❌ No valid tokens found after splitting!")
+        return
+
+    added_count = 0
+    duplicates = 0
+    invalid = 0
+
+    for token in tokens:
+        # Skip empty tokens
+        if not token:
+            invalid += 1
+            continue
+            
+        if token not in token_list:
+            token_list.append(token)
+            with open(TOKEN_LIST_PATH, "a") as f:
+                f.write(token + "\n")
+            added_count += 1
+        else:
+            duplicates += 1
+
+    # Build result message
+    message = (
+        "Token Add Results:\n"
+        f"✅ New tokens added: {added_count}\n"
+        f"⚠️ Duplicates skipped: {duplicates}\n"
+        f"ℹ️ Total tokens now: {len(token_list)}"
+    )
+    
+    if invalid:
+        message += f"\n❌ Empty/invalid tokens: {invalid}"
+    
+    # Add security notice
+    message += "\n\n🔒 Your token message has been deleted for security."
+    
+    await m.reply_text(message)
+
+@bot.on_message(filters.command("deletetokens") & filters.private)
+async def delete_all_tokens(client: Client, message: Message):
+    global token_list
+    token_list.clear()
+    if os.path.exists(TOKEN_LIST_PATH):
+        os.remove(TOKEN_LIST_PATH)
+    await message.reply_text("🗑️ All saved tokens have been deleted.")
+
+@bot.on_message(filters.command("avtoken"))
+async def avtoken_handler(_, message):
+    try:
+        with open("tokens.txt", "r") as f:
+            tokens = [line.strip() for line in f if line.strip()]
+            count = len(tokens)
+
+        await message.reply_text(f"🔐 Available Tokens: **{count}**")
+    except Exception as e:
+        await message.reply_text(f"❌ Error reading tokens:\n{str(e)}")
+
+
+# ======================================
+
 
 @bot.on_message(filters.command(["y2t"]))
 async def youtube_to_txt(client, message: Message):
@@ -720,17 +861,38 @@ async def txt_handler(bot: Client, m: Message):
 
             elif "https://cpvod.testbook.com/" in url:
                 url = url.replace("https://cpvod.testbook.com/","https://media-cdn.classplusapp.com/drm/")
+                #url = f"https://drmapijion-botupdatevip.vercel.app/api?url={url}&token={cptoken}"
                 url = f"https://scammer-keys.vercel.app/api?url={url}&token={cptoken}&auth=@scammer_botxz1"
                 mpd, keys = helper.get_mps_and_keys(url)
                 url = mpd
                 keys_string = " ".join([f"--key {key}" for key in keys])
 
             elif "classplusapp.com/drm/" in url:
+                # url = f"https://drmapijion-botupdatevip.vercel.app/api?url={url}&token={cptoken}"
                 url = f"https://scammer-keys.vercel.app/api?url={url}&token={cptoken}&auth=@scammer_botxz1"
-                mpd, keys = helper.get_mps_and_keys(url)
+
+                result = helper.get_mps_and_keys(url)
+                if result is None:
+                    await bot.send_message(channel_id, "❌ Token failed. Trying next one...")
+
+                    handle_token_failure(selected_token)
+                    selected_token = get_current_token()
+
+                    if not selected_token:
+                        await bot.send_message(channel_id, "❌ All tokens exhausted. Stopping.")
+                        break
+
+                    # Replace tokens with the new one
+                    cwtoken = selected_token
+                    cptoken = selected_token
+                    pwtoken = selected_token
+
+                    i -= 2  # retry the previous link
+                    continue
+
+                mpd, keys = result
                 url = mpd
                 keys_string = " ".join([f"--key {key}" for key in keys])
-
             elif "tencdn.classplusapp" in url:
                 headers = {'host': 'api.classplusapp.com', 'x-access-token': f'{raw_text4}', 'accept-language': 'EN', 'api-version': '18', 'app-version': '1.4.73.2', 'build-number': '35', 'connection': 'Keep-Alive', 'content-type': 'application/json', 'device-details': 'Xiaomi_Redmi 7_SDK-32', 'device-id': 'c28d3cb16bbdac01', 'region': 'IN', 'user-agent': 'Mobile-Android', 'webengage-luid': '00000187-6fe4-5d41-a530-26186858be4c', 'accept-encoding': 'gzip'}
                 params = {"url": f"{url}"}
