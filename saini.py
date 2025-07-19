@@ -294,34 +294,54 @@ async def download_and_decrypt_video(url, cmd, name, key):
 
 
 async def send_vid(bot: Client, m: Message, cc, filename, thumb, name, prog):
-    # Generate a thumbnail
+    import shutil
+
+    # Step 1: Generate thumbnail
     subprocess.run(f'ffmpeg -i "{filename}" -ss 00:01:00 -vframes 1 "{filename}.jpg"', shell=True)
     await prog.delete(True)
     reply = await m.reply_text(f"<b>Generate Thumbnail:</b>\n<blockquote><b>{name}</b></blockquote>")
+
+    # Step 2: Thumbnail logic
     try:
-        if thumb == "no":
-            thumbnail = f"{filename}.jpg"
-        else:
-            thumbnail = thumb
+        thumbnail = f"{filename}.jpg" if thumb == "no" else thumb
     except Exception as e:
         await m.reply_text(str(e))
+        return
 
-    # Add watermark text overlay to the video with black color and 20% opacity
+    # Step 3: Clean filename
+    safe_filename = filename.replace("?", "").replace(" ", "_")
+    if safe_filename != filename:
+        os.rename(filename, safe_filename)
+        filename = safe_filename
+
+    # Step 4: Setup watermark details
     watermarked_filename = f"watermarked_{filename}"
+    os.makedirs(os.path.dirname(watermarked_filename), exist_ok=True)
     watermark_text = "SAINI BOTS"
-    subprocess.run(
-        f'ffmpeg -i "{filename}" -vf "drawtext=text=\'{watermark_text}\':fontcolor=black@0.2:fontsize=24:x=(w-text_w)/2:y=(h-text_h)/2" -codec:a copy "{watermarked_filename}"', 
-        shell=True
-    )
+    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
+    # Step 5: Add watermark in center
+    try:
+        subprocess.run([
+            "ffmpeg", "-i", filename,
+            "-vf", f"drawtext=fontfile='{font_path}':text='{watermark_text}':fontcolor=black@0.2:fontsize=30:x=(w-text_w)/2:y=(h-text_h)/2",
+            "-codec:a", "copy", watermarked_filename
+        ], check=True)
+    except subprocess.CalledProcessError as e:
+        await m.reply_text(f"❌ FFmpeg watermark failed: {e}")
+        return
+
+    # Step 6: Upload
     dur = int(duration(watermarked_filename))
     start_time = time.time()
-
     try:
         await m.reply_video(watermarked_filename, caption=cc, supports_streaming=True, height=720, width=1280, thumb=thumbnail, duration=dur, progress=progress_bar, progress_args=(reply, start_time))
     except Exception:
         await m.reply_document(watermarked_filename, caption=cc, progress=progress_bar, progress_args=(reply, start_time))
 
+    # Step 7: Cleanup
     os.remove(watermarked_filename)
-    os.remove(f"{filename}.jpg")
+    if os.path.exists(f"{filename}.jpg"):
+        os.remove(f"{filename}.jpg")
     await reply.delete(True)
+
