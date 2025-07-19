@@ -304,9 +304,9 @@ async def send_vid(bot: Client, m: Message, cc, filename, thumb, name, prog):
     # Step 2: Thumbnail logic
     try:
        if thumb == "/d":
-            thumbnail = f"{filename}.jpg"
-        else:
-            thumbnail = thumb
+           thumbnail = f"{filename}.jpg"
+       else:
+           thumbnail = thumb
     except Exception as e:
         await m.reply_text(str(e))
         return
