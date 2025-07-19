@@ -30,20 +30,11 @@ def duration(filename):
     return float(result.stdout)
 
 def get_mps_and_keys(api_url):
-    try:
-        response = requests.get(api_url, timeout=10)
-        response_json = response.json()
-        mpd = response_json.get('MPD')
-        keys = response_json.get('KEYS')
-
-        if not mpd or not keys:
-            return None
-
-        return mpd, keys
-    except Exception as e:
-        print(f"[ERROR:get_mps_and_keys] {e}")
-        return None
-
+    response = requests.get(api_url)
+    response_json = response.json()
+    mpd = response_json.get('MPD')
+    keys = response_json.get('KEYS')
+    return mpd, keys
    
 def exec(cmd):
         process = subprocess.run(cmd, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -301,28 +292,36 @@ async def download_and_decrypt_video(url, cmd, name, key):
             print(f"Failed to decrypt {video_path}.")  
             return None  
 
-async def send_vid(bot: Client, m: Message,cc,filename,thumb,name,prog):
-    subprocess.run(f'ffmpeg -i "{filename}" -ss 00:00:10 -vframes 1 "{filename}.jpg"', shell=True)
-    await prog.delete (True)
+
+async def send_vid(bot: Client, m: Message, cc, filename, thumb, name, prog):
+    # Generate a thumbnail
+    subprocess.run(f'ffmpeg -i "{filename}" -ss 00:01:00 -vframes 1 "{filename}.jpg"', shell=True)
+    await prog.delete(True)
     reply = await m.reply_text(f"<b>Generate Thumbnail:</b>\n<blockquote><b>{name}</b></blockquote>")
     try:
-        if thumb == "/d":
+        if thumb == "no":
             thumbnail = f"{filename}.jpg"
         else:
             thumbnail = thumb
-            
     except Exception as e:
         await m.reply_text(str(e))
-      
-    dur = int(duration(filename))
+
+    # Add watermark text overlay to the video with black color and 20% opacity
+    watermarked_filename = f"watermarked_{filename}"
+    watermark_text = "SAINI BOTS"
+    subprocess.run(
+        f'ffmpeg -i "{filename}" -vf "drawtext=text=\'{watermark_text}\':fontcolor=black@0.2:fontsize=24:x=(w-text_w)/2:y=(h-text_h)/2" -codec:a copy "{watermarked_filename}"', 
+        shell=True
+    )
+
+    dur = int(duration(watermarked_filename))
     start_time = time.time()
 
     try:
-        await m.reply_video(filename,caption=cc, supports_streaming=True,height=720,width=1280,thumb=thumbnail,duration=dur, progress=progress_bar,progress_args=(reply,start_time))
+        await m.reply_video(watermarked_filename, caption=cc, supports_streaming=True, height=720, width=1280, thumb=thumbnail, duration=dur, progress=progress_bar, progress_args=(reply, start_time))
     except Exception:
-        await m.reply_document(filename,caption=cc, progress=progress_bar,progress_args=(reply,start_time))
-    
-    finally:
-        await reply.delete(True)
-        os.remove(filename)
-        os.remove(f"{filename}.jpg")
+        await m.reply_document(watermarked_filename, caption=cc, progress=progress_bar, progress_args=(reply, start_time))
+
+    os.remove(watermarked_filename)
+    os.remove(f"{filename}.jpg")
+    await reply.delete(True)
